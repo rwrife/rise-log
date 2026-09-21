@@ -86,16 +86,20 @@ CI uses the App Store Connect API Actions secrets already configured on this rep
 
 ## Current status & milestones
 
-Documentation + backlog only at creation. No Xcode project, app build, test suite, device evidence, or TestFlight binary exists yet.
+**Skeleton + CI landed (M1).** `RiseLog.xcodeproj` (SwiftUI app target, bundle id
+`com.infinityball.riselog`, iPhone-only `TARGETED_DEVICE_FAMILY = 1`), the local pure-Swift
+`RiseKit` package (swift-testing, Linux-runnable), and CI with the exact pinned toolchain
+(Xcode 26.0.1 / 17A400 / iOS SDK 26.0), iPhone-only pre/post-build gates, and an
+empty-allowlist zero-network gate. No device evidence or TestFlight binary exists yet.
 
-1. M1: Xcode project + pure-Swift domain package + CI (pinned toolchain, iPhone-only guard).
+1. M1: ✅ Xcode project + pure-Swift domain package + CI (pinned toolchain, iPhone-only guard).
 2. M2: Ledger store (GRDB) + derived status engine with unknown-safe semantics.
 3. M3: Jar wall + culture detail + event logging UI (accessible).
 4. M4: Lineage DAG, reminders, photo notes.
 5. M5: Backup/restore/export + privacy audit gate.
 6. M6: TestFlight release evidence.
 
-## Development quickstart (future, once skeleton lands)
+## Development quickstart
 
 ```bash
 # Requires macOS with Xcode pinned in toolchain.json (Xcode 26.0.1 / iOS SDK 26.0)
