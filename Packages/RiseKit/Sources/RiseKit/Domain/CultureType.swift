@@ -31,7 +31,10 @@ public struct CultureType: Hashable, Sendable {
 
     public let kind: Kind
 
-    private init(kind: Kind) {
+    /// Internal: the store layer (same module) and @testable tests build
+    /// typed values directly; external callers use the static members or
+    /// `init?(customName:)`, which enforce the blank-name rule.
+    init(kind: Kind) {
         self.kind = kind
     }
 

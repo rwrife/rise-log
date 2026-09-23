@@ -40,6 +40,7 @@ for root in "${ROOTS[@]}"; do
   [ -d "$root" ] || continue
   for pat in "${PATTERNS[@]}"; do
     hits=$(grep -RnE --include='*.swift' --include='*.h' --include='*.m' --include='*.c' \
+      --exclude-dir=.build \
       "$pat" "$root" 2>/dev/null || true)
     [ -n "$hits" ] && matches+="$hits"$'\n'
   done
