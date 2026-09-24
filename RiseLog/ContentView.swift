@@ -1,24 +1,10 @@
 import SwiftUI
-import RiseKit
 
-/// Skeleton root view. The core workflow UI (issue #4 — jar wall, culture
-/// detail, event logging) replaces this; dual-screen adaptation is routed
-/// through `FermentWorkspaceLayout` (issue #5).
-struct ContentView: View {
-    var body: some View {
-        VStack(spacing: 8) {
-            Text("Rise Log")
-                .font(.title)
-                .accessibilityAddTraits(.isHeader)
-            Text(RiseKit.milestone)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding()
-        .accessibilityElement(children: .combine)
-    }
-}
-
+/// The skeleton `ContentView` was replaced by the core workflow UI in
+/// issue #4. The root view now lives in `JarWallView.swift` as `RootView`
+/// (NavigationStack + jar wall + create sheet); this file intentionally
+/// holds only the preview shim so the file history stays clear.
 #Preview {
-    ContentView()
+    RootView()
+        .environment(try! AppEnvironment())
 }

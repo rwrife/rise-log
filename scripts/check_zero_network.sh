@@ -10,7 +10,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-ROOTS=("RiseLog" "Packages")
+ROOTS=("RiseLog" "Packages" "UITests")
 ALLOWLIST=()   # empty by design; extend only with explicit user sign-off
 
 PATTERNS=(

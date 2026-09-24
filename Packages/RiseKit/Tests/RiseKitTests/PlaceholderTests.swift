@@ -8,9 +8,9 @@ struct PlaceholderTests {
         #expect(RiseKit.domain == "RiseKit")
     }
 
-    @Test("milestone marker is set for M2")
+    @Test("milestone marker is set for M3")
     func milestoneMarker() {
-        #expect(RiseKit.milestone == "M2-store")
+        #expect(RiseKit.milestone == "M3-ui")
     }
 
     @Test("markers are pure constants")

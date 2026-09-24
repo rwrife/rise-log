@@ -82,3 +82,51 @@ public struct Event: Hashable, Sendable {
         self.payload = payload
     }
 }
+
+extension Event {
+    /// One-line plain-text rendering of the event for timelines and
+    /// correction prompts. Pure (no `Date()` reads, no formatter singletons)
+    /// so Linux CI can pin the exact strings the UI shows.
+    /// Never contains safety/edibility vocabulary.
+    public var displaySummary: String {
+        switch payload {
+        case .feed(let amount):
+            if let flour = amount.flourGrams, let water = amount.waterGrams {
+                return "Feed — \(Self.grams(flour)) flour + \(Self.grams(water)) water"
+            }
+            if let flour = amount.flourGrams {
+                return "Feed — \(Self.grams(flour)) flour"
+            }
+            if let water = amount.waterGrams {
+                return "Feed — \(Self.grams(water)) water"
+            }
+            return "Feed — amounts not recorded"
+        case .riseCheck(let stage):
+            return "Rise check — \(stage.displayName)"
+        case .bottle:
+            return "Bottle"
+        case .bake(let flourUsedGrams):
+            if let grams = flourUsedGrams {
+                return "Bake — \(Self.grams(grams)) flour used"
+            }
+            return "Bake — flour used not recorded"
+        case .discard(let removedGrams):
+            if let grams = removedGrams {
+                return "Discard — \(Self.grams(grams)) removed"
+            }
+            return "Discard — amount not recorded"
+        case .note(let text):
+            return "Note — \(text)"
+        case .split(let parent, _):
+            return "Split from \(parent.rawValue)"
+        }
+    }
+
+    /// Whole grams render as integers; fractional grams keep one decimal.
+    private static func grams(_ value: Double) -> String {
+        if value == value.rounded() {
+            return "\(Int(value)) g"
+        }
+        return String(format: "%.1f g", value)
+    }
+}
