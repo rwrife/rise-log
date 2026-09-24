@@ -36,19 +36,20 @@ final class RiseLogJourneyTests: XCTestCase {
 
     /// Fleet-known trap at large text sizes: found != hittable (lazy List
     /// rows below the AX5 viewport exist but never get tapped), and a tap
-    /// on an unhittable element silently does nothing. Scroll (alternating
-    /// direction — rows can be pushed ABOVE the viewport by the keyboard)
-    /// until hittable, and fail loudly with provenance otherwise.
+    /// on an unhittable element silently does nothing. Poll `isHittable`
+    /// (there is no waitForHittable API), scrolling alternately — rows can
+    /// land below OR above the AX5 viewport — and fail loudly with
+    /// provenance otherwise.
     private func tap(_ identifier: String, timeout: TimeInterval = 15) {
         let element = app.descendants(matching: .any)[identifier]
         XCTAssertTrue(element.waitForExistence(timeout: timeout), "tap target \(identifier) missing")
-        if element.isHittable { element.tap(); return }
         let deadline = Date().addingTimeInterval(timeout)
         var scrollUpFirst = true // reveal content below first
         while Date() < deadline {
+            if element.isHittable { element.tap(); return }
             if scrollUpFirst { app.swipeUp() } else { app.swipeDown() }
             scrollUpFirst.toggle()
-            if element.waitForHittable(timeout: 2) { element.tap(); return }
+            _ = element.waitForExistence(timeout: 1)
         }
         XCTAssertTrue(element.isHittable,
                       "tap target \(identifier) exists but never became hittable")
@@ -186,9 +187,10 @@ final class RiseLogJourneyTests: XCTestCase {
 
         // Feed 50g, then undo -> a discard row appears; the feed row stays.
         tap("detail.log.feed")
-        app.textFields["feed.flour"].waitForExistence(timeout: 10)
-        app.textFields["feed.flour"].tap()
-        app.textFields["feed.flour"].typeText("50")
+        let flourField = app.textFields["feed.flour"]
+        XCTAssertTrue(flourField.waitForExistence(timeout: 10))
+        flourField.tap()
+        flourField.typeText("50")
         tap("feed.commit")
         XCTAssertTrue(expectText("Feed — 50 g flour"))
 
