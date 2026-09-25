@@ -66,17 +66,26 @@ final class RiseLogJourneyTests: XCTestCase {
                       "tap target \(identifier) missing")
 
         var scrollUpFirst = true // reveal content below first
+        var dismissedKeyboard = false
         while Date() < deadline {
             if element.isHittable { element.tap(); return }
 
-            // Create sheet toolbar buttons can be blocked by an active
-            // software keyboard in hosted simulators; dismiss before retry.
-            if app.keyboards.count > 0,
-               let returnKey = app.keyboards.buttons.allElementsBoundByIndex
-                    .first(where: { $0.label == "Return" || $0.label == "Done" }),
-               returnKey.isHittable {
-                returnKey.tap()
-                continue
+            // One-shot: an active software keyboard (the create sheet keeps
+            // the name field focused after typeText) can hold a toolbar
+            // control unhittable on the small pinned simulator. Try the
+            // keyboard's own dismiss key once, then fall back to scrolling.
+            if !dismissedKeyboard, app.keyboards.count > 0 {
+                dismissedKeyboard = true
+                if let dismissKey = app.keyboards.buttons
+                    .matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@",
+                                          "Return", "Done"))
+                    .firstMatch.exists, dismissKey {
+                    let key = app.keyboards.buttons
+                        .matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@",
+                                              "Return", "Done"))
+                        .firstMatch
+                    if key.isHittable { key.tap() }
+                }
             }
 
             if scrollUpFirst { app.swipeUp() } else { app.swipeDown() }
