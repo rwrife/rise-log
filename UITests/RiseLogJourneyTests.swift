@@ -41,16 +41,49 @@ final class RiseLogJourneyTests: XCTestCase {
     /// land below OR above the AX5 viewport — and fail loudly with
     /// provenance otherwise.
     private func tap(_ identifier: String, timeout: TimeInterval = 15) {
-        let element = app.descendants(matching: .any)[identifier]
-        XCTAssertTrue(element.waitForExistence(timeout: timeout), "tap target \(identifier) missing")
+        // AX tree order can surface a non-hittable child (e.g. static text)
+        // before its tappable parent. Prefer concrete controls first.
+        let preferred: [XCUIElement] = [
+            app.buttons[identifier],
+            app.navigationBars.buttons[identifier],
+            app.toolbars.buttons[identifier],
+            app.cells[identifier],
+            app.otherElements[identifier],
+            app.descendants(matching: .any)[identifier],
+        ]
+
         let deadline = Date().addingTimeInterval(timeout)
+        var element: XCUIElement = preferred.last!
+        var matched = false
+        for candidate in preferred {
+            if candidate.exists || candidate.waitForExistence(timeout: 1) {
+                element = candidate
+                matched = true
+                break
+            }
+        }
+        XCTAssertTrue(matched || element.waitForExistence(timeout: max(1, timeout - 1)),
+                      "tap target \(identifier) missing")
+
         var scrollUpFirst = true // reveal content below first
         while Date() < deadline {
             if element.isHittable { element.tap(); return }
+
+            // Create sheet toolbar buttons can be blocked by an active
+            // software keyboard in hosted simulators; dismiss before retry.
+            if app.keyboards.count > 0,
+               let returnKey = app.keyboards.buttons.allElementsBoundByIndex
+                    .first(where: { $0.label == "Return" || $0.label == "Done" }),
+               returnKey.isHittable {
+                returnKey.tap()
+                continue
+            }
+
             if scrollUpFirst { app.swipeUp() } else { app.swipeDown() }
             scrollUpFirst.toggle()
             _ = element.waitForExistence(timeout: 1)
         }
+
         XCTAssertTrue(element.isHittable,
                       "tap target \(identifier) exists but never became hittable")
         element.tap()
