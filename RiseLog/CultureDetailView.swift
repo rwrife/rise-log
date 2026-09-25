@@ -23,6 +23,7 @@ struct CultureDetailView: View {
             }
         }
         .navigationTitle(culture?.name ?? "Culture")
+        .accessibilityIdentifier("detail.screen")
         .sheet(item: $capture) { capture in
             EventCaptureSheet(cultureId: cultureId, kind: capture.kind) { event in
                 lastLogged = event
@@ -42,7 +43,6 @@ struct CultureDetailView: View {
             Text("Rise Log never edits stored events. Logging again now adds a new event that supersedes the latest one.")
         }
         .overlay(alignment: .bottom) { undoBanner }
-        .accessibilityIdentifier("detail.screen")
     }
 
     // MARK: Sections

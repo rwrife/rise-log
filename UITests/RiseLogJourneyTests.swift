@@ -169,10 +169,14 @@ final class RiseLogJourneyTests: XCTestCase {
 
         createCultureNamed("Journey jar")
 
-        // New jar: explicit unknown badge (no feed/checks yet), asserted on
-        // the wall row (see expectWallBadge for why both AX shapes are polled).
-        XCTAssertTrue(expectWallBadge(name: "Journey jar", badgeLabel: "Unknown, no checks logged"),
-                      "fresh culture should show the explicit unknown badge")
+        // New jar: ferment age is legitimately known from createdAt even
+        // before a feed/check, so the VoiceOver badge reads "Day 0 in
+        // ferment" (RiseKit's Linux-pinned derivation).
+        XCTAssertTrue(expectWallBadge(name: "Journey jar", badgeLabel: "Day 0 in ferment"),
+                      "fresh culture should show the derived Day 0 badge")
+        XCTAssertFalse(expectWallBadge(name: "Journey jar",
+                                       badgeLabel: "Unknown, no checks logged", timeout: 3),
+                       "known ferment age must not render as wholly unknown")
 
         // Open its detail (tap the NavigationLink cell).
         openRow(named: "Journey jar")
