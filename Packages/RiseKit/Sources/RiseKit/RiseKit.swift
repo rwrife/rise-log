@@ -5,11 +5,13 @@
 /// Issue #2 landed the domain entities (`Culture`, `Event`, `LineageGraph`)
 /// and the deterministic derivation engine (`StatusEngine`). Issue #3 landed
 /// the GRDB store (`RiseLogStore`: migration v1, append-only event table,
-/// indexed derived queries) — still zero-network, SQLite-only.
+/// indexed derived queries) — still zero-network, SQLite-only. Issue #4
+/// landed the core workflow UI (jar wall, detail timeline, event capture)
+/// with the badge/wording rules pinned in this package.
 public enum RiseKit {
     /// Namespace marker for the domain layer.
     public static let domain = "RiseKit"
 
     /// Current build/CI milestone marker consumed by the app's debug surface.
-    public static let milestone = "M2-store"
+    public static let milestone = "M3-ui"
 }

@@ -86,16 +86,18 @@ CI uses the App Store Connect API Actions secrets already configured on this rep
 
 ## Current status & milestones
 
-**Skeleton + CI landed (M1).** `RiseLog.xcodeproj` (SwiftUI app target, bundle id
-`com.infinityball.riselog`, iPhone-only `TARGETED_DEVICE_FAMILY = 1`), the local pure-Swift
-`RiseKit` package (swift-testing, Linux-runnable), and CI with the exact pinned toolchain
-(Xcode 26.0.1 / 17A400 / iOS SDK 26.0), iPhone-only pre/post-build gates, and an
-empty-allowlist zero-network gate. No device evidence or TestFlight binary exists yet.
+**Core workflow UI landed (M3).** Jar wall with derived badges, culture
+detail timeline, fast Feed/Check/Bottle/Bake/Discard/Note capture,
+append-only undo/correct, empty-state with sample culture, XCUITest
+journey CI on the pinned simulator, and badge wording rules unit-tested
+in RiseKit (no safety vocabulary, explicit Unknown states). See
+`docs/core-ui-evidence.md` for the host-verified vs CI-pending split.
+No device evidence or TestFlight binary exists yet.
 
 1. M1: ✅ Xcode project + pure-Swift domain package + CI (pinned toolchain, iPhone-only guard).
-2. M2: Ledger store (GRDB) + derived status engine with unknown-safe semantics.
-3. M3: Jar wall + culture detail + event logging UI (accessible).
-4. M4: Lineage DAG, reminders, photo notes.
+2. M2: ✅ Ledger store (GRDB) + derived status engine with unknown-safe semantics.
+3. M3: ✅ Jar wall + culture detail + event logging UI (accessible).
+4. M4: Duo layout seam, lineage UI, reminders, photo notes.
 5. M5: Backup/restore/export + privacy audit gate.
 6. M6: TestFlight release evidence.
 
