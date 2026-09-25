@@ -246,7 +246,12 @@ final class RiseLogJourneyTests: XCTestCase {
         tap("detail.correct")
         // confirmationDialog on iPhone presents as an action sheet, not
         // an alert — query the option button globally.
-        let confirm = app.buttons["Log again now"]
+        // iPhone confirmationDialog can expose a nested duplicate Button
+        // pair for one action. `app.buttons["Log again now"]` requires a
+        // unique match and fails; firstMatch targets the outer tappable row.
+        let confirm = app.buttons.matching(
+            NSPredicate(format: "identifier == %@", "detail.correct-confirm")
+        ).firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 10),
                       "correct confirmation should offer 'Log again now'")
         confirm.tap()
