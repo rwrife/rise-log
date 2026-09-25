@@ -23,7 +23,6 @@ struct CultureDetailView: View {
             }
         }
         .navigationTitle(culture?.name ?? "Culture")
-        .accessibilityIdentifier("detail.screen")
         .sheet(item: $capture) { capture in
             EventCaptureSheet(cultureId: cultureId, kind: capture.kind) { event in
                 lastLogged = event

@@ -180,7 +180,7 @@ final class RiseLogJourneyTests: XCTestCase {
 
         // Open its detail (tap the NavigationLink cell).
         openRow(named: "Journey jar")
-        expect("detail.screen")
+        expect("detail.status")
 
         // Feed: 2 taps, no quantities.
         tap("detail.log.feed")
@@ -212,7 +212,7 @@ final class RiseLogJourneyTests: XCTestCase {
                       "sample badge must match the RiseKit-pinned derivation (VoiceOver form)")
 
         openRow(named: "Sample starter")
-        expect("detail.screen")
+        expect("detail.status")
         XCTAssertTrue(expectText("Feed — 50 g flour + 50 g water"))
         XCTAssertTrue(expectText("Rise check — peaked"))
         XCTAssertTrue(expectText("Last feed: 14h ago"))
@@ -224,7 +224,7 @@ final class RiseLogJourneyTests: XCTestCase {
         app.launch()
         createCultureNamed("Audit jar")
         openRow(named: "Audit jar")
-        expect("detail.screen")
+        expect("detail.status")
 
         // Feed 50g, then undo -> a discard row appears; the feed row stays.
         tap("detail.log.feed")
@@ -275,7 +275,7 @@ final class RiseLogJourneyTests: XCTestCase {
 
         createCultureNamed("Big jar")
         app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Big jar")).firstMatch.tap()
-        expect("detail.screen")
+        expect("detail.status")
 
         tap("detail.log.feed")
         tap("feed.commit")
