@@ -76,16 +76,11 @@ final class RiseLogJourneyTests: XCTestCase {
             // keyboard's own dismiss key once, then fall back to scrolling.
             if !dismissedKeyboard, app.keyboards.count > 0 {
                 dismissedKeyboard = true
-                if let dismissKey = app.keyboards.buttons
+                let key = app.keyboards.buttons
                     .matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@",
                                           "Return", "Done"))
-                    .firstMatch.exists, dismissKey {
-                    let key = app.keyboards.buttons
-                        .matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@",
-                                              "Return", "Done"))
-                        .firstMatch
-                    if key.isHittable { key.tap() }
-                }
+                    .firstMatch
+                if key.exists && key.isHittable { key.tap() }
             }
 
             if scrollUpFirst { app.swipeUp() } else { app.swipeDown() }
