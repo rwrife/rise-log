@@ -131,7 +131,6 @@ struct CultureDetailView: View {
             .padding()
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
             .padding()
-            .accessibilityIdentifier("detail.undo-banner")
         }
     }
 }
