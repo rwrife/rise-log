@@ -6,11 +6,25 @@ import RiseKit
 struct CultureDetailView: View {
     @Environment(AppEnvironment.self) private var env
     let cultureId: CultureID
+    let initialAnchorID: String?
+    let onTimelineScroll: (String) -> Void
 
     @State private var capture: CaptureKind?
     @State private var showCorrect = false
     /// Most recently logged event (drives the transient undo banner).
     @State private var lastLogged: Event?
+    @State private var visibleTimelineEventID: String?
+
+    init(
+        cultureId: CultureID,
+        initialAnchorID: String? = nil,
+        onTimelineScroll: @escaping (String) -> Void = { _ in }
+    ) {
+        self.cultureId = cultureId
+        self.initialAnchorID = initialAnchorID
+        self.onTimelineScroll = onTimelineScroll
+        _visibleTimelineEventID = State(initialValue: initialAnchorID)
+    }
 
     private var culture: Culture? { env.culture(cultureId) }
 
@@ -42,6 +56,12 @@ struct CultureDetailView: View {
             Text("Rise Log never edits stored events. Logging again now adds a new event that supersedes the latest one.")
         }
         .overlay(alignment: .bottom) { undoBanner }
+        .scrollPosition(id: $visibleTimelineEventID, anchor: .top)
+        .onChange(of: visibleTimelineEventID) { _, eventID in
+            if let eventID {
+                onTimelineScroll(eventID)
+            }
+        }
     }
 
     // MARK: Sections
@@ -99,6 +119,7 @@ struct CultureDetailView: View {
             } else {
                 ForEach(events, id: \.id) { event in
                     TimelineRow(event: event)
+                        .id(event.id.rawValue)
                         .accessibilityIdentifier("detail.row.\(event.id.rawValue)")
                 }
             }

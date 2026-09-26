@@ -15,7 +15,7 @@ struct RiseLogApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            FermentWorkspaceLayout()
                 .environment(env)
         }
     }

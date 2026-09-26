@@ -294,4 +294,35 @@ final class RiseLogJourneyTests: XCTestCase {
                                       timeout: 25),
                       "badge (VoiceOver label form) must exist at AX5")
     }
+
+    /// Issue #5 continuity contract: culture selection and the per-culture
+    /// timeline anchor survive a real background/foreground transition.
+    /// Sample ids are deterministic RiseKit fixtures, so this proves the
+    /// exact oldest row remains visible rather than matching row copy.
+    func testSelectionAndScrollAnchorSurviveBackgrounding() throws {
+        app.launch()
+        expect("wall.empty")
+        tap("wall.sample")
+        openRow(named: "Sample starter")
+        expect("detail.status")
+
+        let anchor = app.descendants(matching: .any)["detail.row.sample-e1"]
+        let deadline = Date().addingTimeInterval(15)
+        while !anchor.isHittable && Date() < deadline {
+            app.swipeUp()
+            _ = anchor.waitForExistence(timeout: 1)
+        }
+        XCTAssertTrue(anchor.isHittable,
+                      "oldest sample event must be visible before backgrounding")
+
+        XCUIDevice.shared.press(.home)
+        app.activate()
+
+        expect("detail.status", timeout: 15,
+               "selected culture detail must survive backgrounding")
+        XCTAssertTrue(anchor.waitForExistence(timeout: 10),
+                      "saved timeline anchor must exist after foregrounding")
+        XCTAssertTrue(anchor.isHittable,
+                      "saved timeline anchor must remain visible after foregrounding")
+    }
 }

@@ -75,6 +75,9 @@ xcodebuild -version
 phase="zero_network_gate"
 bash scripts/check_zero_network.sh
 
+phase="workspace_layout_seam_guard"
+bash scripts/check_workspace_layout_seam.sh
+
 phase="iphone_only_guard"
 echo "--- asserting TARGETED_DEVICE_FAMILY = 1 in RiseLog.xcodeproj ---"
 grep -q "TARGETED_DEVICE_FAMILY = 1;" RiseLog.xcodeproj/project.pbxproj \
