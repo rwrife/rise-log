@@ -66,7 +66,7 @@ Rise Log is designed as the canonical **glance-wall + detail-workspace** pair:
 
 - **Folded / today:** a standard single-pane iPhone app; the jar wall is already the glanceable surface.
 - **Duo design target:** one screen as a persistent **jar wall control surface** (status badges, quick Feed/Bottle taps, reminder state) while the other shows the selected culture's full timeline, photo notes, and lineage. Fold/unfold continuity must preserve selection and scroll state.
-- **Build shape (SDK gap):** the dual-screen experience is a documented design target, **not a dependency**. The app builds today as a standard iPhone app with zero unavailable fold APIs. All layout adaptation funnels through a single seam, `FermentWorkspaceLayout`, which today collapses to single-pane and will adopt native dual-screen APIs when the SDK matures — the only code site expected to change.
+- **Build shape (SDK gap):** the dual-screen experience is a documented design target, **not a dependency**. The app builds today as a standard iPhone app with zero unavailable fold APIs. All layout adaptation funnels through a single seam, `FermentWorkspaceLayout`, which today collapses to single-pane and will adopt native dual-screen APIs when the SDK matures — the only code site expected to change. See [`docs/dual-screen.md`](docs/dual-screen.md) for the routing truth table, continuity contract, CI guards, and migration path.
 
 ## Privacy, permissions, and data storage
 
@@ -86,12 +86,14 @@ CI uses the App Store Connect API Actions secrets already configured on this rep
 
 ## Current status & milestones
 
-**Core workflow UI landed (M3).** Jar wall with derived badges, culture
+**Core workflow UI landed (M3); Duo seam implemented (M4 slice).** Jar wall with derived badges, culture
 detail timeline, fast Feed/Check/Bottle/Bake/Discard/Note capture,
 append-only undo/correct, empty-state with sample culture, XCUITest
 journey CI on the pinned simulator, and badge wording rules unit-tested
 in RiseKit (no safety vocabulary, explicit Unknown states). See
-`docs/core-ui-evidence.md` for the host-verified vs CI-pending split.
+`docs/core-ui-evidence.md` for core UI evidence and
+[`docs/dual-screen.md`](docs/dual-screen.md) for the inert dual-screen seam,
+selection/scroll continuity contract, and migration path.
 No device evidence or TestFlight binary exists yet.
 
 1. M1: ✅ Xcode project + pure-Swift domain package + CI (pinned toolchain, iPhone-only guard).

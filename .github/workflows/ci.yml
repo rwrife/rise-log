@@ -27,6 +27,8 @@ jobs:
         run: swift test --package-path Packages/RiseKit
       - name: Zero-network gate
         run: bash scripts/check_zero_network.sh
+      - name: Workspace layout seam gate
+        run: bash scripts/check_workspace_layout_seam.sh
       - name: Gitignore keeps signing material out
         run: |
           set -e

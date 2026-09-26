@@ -1,40 +1,15 @@
 import SwiftUI
 import RiseKit
 
-/// Root of the jar-wall → detail workflow (issue #4).
-///
-/// NavigationStack (not NavigationSplitView): iPhone-only, single column,
-/// and the split variant would push detail over the wall at compact width
-/// (a fleet-known XCUITest trap). The Duo seam (`FermentWorkspaceLayout`,
-/// issue #5) will wrap this stack, not rewrite it.
-struct RootView: View {
-    @Environment(AppEnvironment.self) private var env
-    @State private var showCreate = false
-
-    var body: some View {
-        NavigationStack {
-            JarWallView()
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            showCreate = true
-                        } label: {
-                            Label("Add culture", systemImage: "plus")
-                                .accessibilityIdentifier("wall.add-culture")
-                        }
-                    }
-                }
-                .sheet(isPresented: $showCreate) {
-                    CreateCultureSheet()
-                }
-        }
-    }
-}
-
 /// The jar wall: every culture with its derived badge, plus the empty
 /// state that offers the sample culture or starting empty.
 struct JarWallView: View {
     @Environment(AppEnvironment.self) private var env
+    private let onSelect: ((CultureID) -> Void)?
+
+    init(onSelect: ((CultureID) -> Void)? = nil) {
+        self.onSelect = onSelect
+    }
 
     var body: some View {
         Group {
@@ -45,20 +20,32 @@ struct JarWallView: View {
             }
         }
         .navigationTitle("Rise Log")
-        .navigationDestination(for: CultureID.self) { id in
-            CultureDetailView(cultureId: id)
-        }
         .refreshable { env.reload() }
     }
 
     private var wall: some View {
         List(env.cultures, id: \.id) { culture in
+            wallRow(culture)
+        }
+        .accessibilityIdentifier("wall.list")
+    }
+
+    @ViewBuilder
+    private func wallRow(_ culture: Culture) -> some View {
+        if let onSelect {
+            Button {
+                onSelect(culture.id)
+            } label: {
+                CultureRow(culture: culture)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("wall.row.\(culture.id.rawValue)")
+        } else {
             NavigationLink(value: culture.id) {
                 CultureRow(culture: culture)
             }
             .accessibilityIdentifier("wall.row.\(culture.id.rawValue)")
         }
-        .accessibilityIdentifier("wall.list")
     }
 
     private var emptyState: some View {
