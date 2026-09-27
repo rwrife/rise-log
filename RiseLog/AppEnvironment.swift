@@ -170,6 +170,54 @@ final class AppEnvironment {
         return event
     }
 
+    // MARK: - Backup / restore (issue #6)
+
+    /// Short version of the running app, embedded in exported archives.
+    var appVersion: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0.0.0"
+    }
+
+    /// The versioned JSON backup archive for the full current state.
+    func makeBackupArchive() throws -> BackupArchive {
+        try store.exportArchive(appVersion: appVersion)
+    }
+
+    /// Encoded versioned JSON archive (Files-app/share-sheet payload).
+    func makeBackupData() throws -> Data {
+        try BackupCodec.encodeJSON(try makeBackupArchive())
+    }
+
+    /// CSV rendering of the full event ledger.
+    func makeLedgerCSV() throws -> String {
+        try BackupCodec.exportCSV(
+            cultures: store.allCultures(),
+            events: store.allEventsWithLoggedAt()
+        )
+    }
+
+    /// Decodes + validates a candidate archive and computes the replace
+    /// preview WITHOUT touching the store. Restore only happens via
+    /// `restore(archive:)` after explicit user confirmation — there is no
+    /// silent merge path anywhere in this flow.
+    func previewRestore(data: Data) throws -> (archive: BackupArchive, preview: BackupRestorePreview) {
+        let archive = try BackupCodec.decodeJSON(data)
+        let currentEvents = (try? store.allEvents()) ?? []
+        let preview = BackupCodec.previewReplace(
+            archive: archive,
+            currentCultures: cultures,
+            currentEvents: currentEvents
+        )
+        return (archive, preview)
+    }
+
+    /// Atomically replaces all stored data with the archive's contents.
+    /// Validation + rollback semantics live in `RiseLogStore`; on any error
+    /// the existing data is untouched.
+    func restore(archive: BackupArchive) throws {
+        try store.restoreReplacingAllData(from: archive)
+        reload()
+    }
+
     // MARK: Undo / correction (append-only — never an edit)
 
     /// Undo a just-logged feed by appending the opposite action: a discard

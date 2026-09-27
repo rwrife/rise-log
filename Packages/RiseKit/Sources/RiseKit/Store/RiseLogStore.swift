@@ -260,6 +260,97 @@ public final class RiseLogStore: Sendable {
         }
     }
 
+    /// Every event across cultures including the audit `loggedAt` timestamp.
+    public func allEventsWithLoggedAt() throws -> [(event: Event, loggedAt: Date)] {
+        try reader.read { r in
+            let rows = try EventRecord
+                .order(Column("occurredAt"), Column("loggedAt"), Column("id"))
+                .fetchAll(r)
+            return try rows.map { row in
+                (event: try row.toDomain(), loggedAt: row.loggedAt)
+            }
+        }
+    }
+
+    /// Exports the full persistent state as a versioned `BackupArchive`.
+    public func exportArchive(appVersion: String = "0.1.0") throws -> BackupArchive {
+        let cultures = try allCultures()
+        let events = try allEventsWithLoggedAt()
+        return BackupArchive(
+            schemaVersion: BackupArchive.currentSchemaVersion,
+            appVersion: appVersion,
+            exportedAt: Date(),
+            cultures: cultures,
+            events: events
+        )
+    }
+
+    /// Replaces all database contents with the contents of the given backup archive.
+    ///
+    /// Validates the archive before modifying the database. Runs inside an atomic
+    /// write transaction: on any error, changes are rolled back and existing data
+    /// is left completely untouched.
+    public func restoreReplacingAllData(from archive: BackupArchive) throws {
+        guard archive.schemaVersion == BackupArchive.currentSchemaVersion else {
+            throw BackupCodecError.unsupportedSchemaVersion(
+                found: archive.schemaVersion,
+                supported: BackupArchive.currentSchemaVersion
+            )
+        }
+
+        let cultureIds = Set(archive.cultures.map(\.id.rawValue))
+        for pair in archive.events {
+            let event = pair.event
+            guard cultureIds.contains(event.cultureId.rawValue) else {
+                throw BackupCodecError.corruptArchive("Event '\(event.id.rawValue)' references unknown culture '\(event.cultureId.rawValue)'")
+            }
+            if case .split(let parent, _) = event.payload {
+                guard cultureIds.contains(parent.rawValue) else {
+                    throw BackupCodecError.corruptArchive("Split event '\(event.id.rawValue)' references unknown parent '\(parent.rawValue)'")
+                }
+            }
+        }
+
+        try writer.write { db in
+            try db.execute(sql: "DROP TRIGGER IF EXISTS lineage_edge_insert")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS event_no_delete")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS event_no_update")
+
+            try db.execute(sql: "DELETE FROM lineage_edge")
+            try db.execute(sql: "DELETE FROM event")
+            try db.execute(sql: "DELETE FROM culture")
+
+            try db.execute(sql: """
+                CREATE TRIGGER event_no_update BEFORE UPDATE ON event
+                BEGIN
+                    SELECT RAISE(ABORT, 'event table is append-only: updates are rejected');
+                END
+                """)
+            try db.execute(sql: """
+                CREATE TRIGGER event_no_delete BEFORE DELETE ON event
+                BEGIN
+                    SELECT RAISE(ABORT, 'event table is append-only: deletes are rejected');
+                END
+                """)
+            try db.execute(sql: """
+                CREATE TRIGGER lineage_edge_insert AFTER INSERT ON event
+                WHEN NEW.kind = 'split' AND NEW.splitParentId IS NOT NULL
+                BEGIN
+                    INSERT OR REPLACE INTO lineage_edge (parentId, childId, separatedAt)
+                    VALUES (NEW.splitParentId, NEW.cultureId, NEW.separatedAt);
+                END
+                """)
+
+            for culture in archive.cultures {
+                try CultureRecord(culture).insert(db)
+            }
+
+            for pair in archive.events {
+                try EventRecord(pair.event, loggedAt: pair.loggedAt).insert(db)
+            }
+        }
+    }
+
     public func event(withId id: EventID) throws -> Event? {
         try reader.read { r in
             try EventRecord.fetchOne(r, key: id.rawValue).map { try $0.toDomain() }

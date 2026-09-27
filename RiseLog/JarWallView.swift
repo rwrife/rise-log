@@ -7,6 +7,8 @@ struct JarWallView: View {
     @Environment(AppEnvironment.self) private var env
     private let onSelect: ((CultureID) -> Void)?
 
+    @State private var showBackup = false
+
     init(onSelect: ((CultureID) -> Void)? = nil) {
         self.onSelect = onSelect
     }
@@ -21,6 +23,19 @@ struct JarWallView: View {
         }
         .navigationTitle("Rise Log")
         .refreshable { env.reload() }
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showBackup = true
+                } label: {
+                    Label("Data & Backup", systemImage: "arrow.up.arrow.down.circle")
+                }
+                .accessibilityIdentifier("wall.backup-button")
+            }
+        }
+        .sheet(isPresented: $showBackup) {
+            BackupView()
+        }
     }
 
     private var wall: some View {

@@ -24,6 +24,12 @@ let package = Package(
         .target(name: "RiseKit", dependencies: [
             .product(name: "GRDB", package: "GRDB.swift"),
         ]),
-        .testTarget(name: "RiseKitTests", dependencies: ["RiseKit"]),
+        .testTarget(
+            name: "RiseKitTests",
+            dependencies: ["RiseKit"],
+            resources: [
+                .copy("Fixtures"),
+            ]
+        ),
     ]
 )
