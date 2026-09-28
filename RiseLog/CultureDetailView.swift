@@ -14,6 +14,7 @@ struct CultureDetailView: View {
     /// Most recently logged event (drives the transient undo banner).
     @State private var lastLogged: Event?
     @State private var visibleTimelineEventID: String?
+    @State private var cadenceSelection: ReminderCadenceOption = .off
 
     init(
         cultureId: CultureID,
@@ -34,9 +35,13 @@ struct CultureDetailView: View {
                 statusSection(culture)
                 logSection
                 timelineSection
+                remindersSection(culture)
             }
         }
         .navigationTitle(culture?.name ?? "Culture")
+        .onAppear { syncCadenceSelection(culture?.cadence) }
+        .onChange(of: culture?.cadence) { _, cadence in syncCadenceSelection(cadence) }
+        .onChange(of: cadenceSelection) { _, option in applyCadenceSelection(option) }
         .sheet(item: $capture) { capture in
             EventCaptureSheet(cultureId: cultureId, kind: capture.kind) { event in
                 lastLogged = event
@@ -126,6 +131,40 @@ struct CultureDetailView: View {
         }
     }
 
+    private func remindersSection(_ culture: Culture) -> some View {
+        Section("Reminders") {
+            Picker("Feeding reminder", selection: $cadenceSelection) {
+                ForEach(ReminderCadenceOption.allCases, id: \.self) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .accessibilityIdentifier("detail.reminders.picker")
+
+            Text(culture.cadence == nil
+                 ? "Off by default. When enabled, Rise Log schedules local reminders anchored to your actual latest feed."
+                 : "Local notifications re-anchor to each logged feed so timing stays aligned.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func syncCadenceSelection(_ cadence: FeedingCadence?) {
+        let option = ReminderCadenceOption(cadence: cadence)
+        if cadenceSelection != option {
+            cadenceSelection = option
+        }
+    }
+
+    private func applyCadenceSelection(_ option: ReminderCadenceOption) {
+        // State synchronization on appearance must not write the same cadence
+        // back or request permission. Only a genuine user-visible change runs
+        // the store + scheduler path.
+        guard ReminderCadenceOption(cadence: culture?.cadence) != option else { return }
+        Task {
+            try? await env.setFeedingCadence(option.cadence, for: cultureId)
+        }
+    }
+
     // MARK: Undo banner (shown right after a logging sheet commits)
 
     @ViewBuilder private var undoBanner: some View {
@@ -152,6 +191,40 @@ struct CultureDetailView: View {
             .padding()
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
             .padding()
+        }
+    }
+}
+
+private enum ReminderCadenceOption: String, CaseIterable {
+    case off
+    case every12Hours
+    case every24Hours
+    case every7Days
+
+    init(cadence: FeedingCadence?) {
+        switch cadence?.everyHours {
+        case 12: self = .every12Hours
+        case 24: self = .every24Hours
+        case 168: self = .every7Days
+        default: self = .off
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .off: "Off"
+        case .every12Hours: "Every 12 hours"
+        case .every24Hours: "Every 24 hours"
+        case .every7Days: "Every 7 days"
+        }
+    }
+
+    var cadence: FeedingCadence? {
+        switch self {
+        case .off: nil
+        case .every12Hours: FeedingCadence(everyHours: 12)
+        case .every24Hours: FeedingCadence(everyHours: 24)
+        case .every7Days: FeedingCadence(everyHours: 168)
         }
     }
 }
