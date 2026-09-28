@@ -99,7 +99,7 @@ No device evidence or TestFlight binary exists yet.
 1. M1: ✅ Xcode project + pure-Swift domain package + CI (pinned toolchain, iPhone-only guard).
 2. M2: ✅ Ledger store (GRDB) + derived status engine with unknown-safe semantics.
 3. M3: ✅ Jar wall + culture detail + event logging UI (accessible).
-4. M4: Duo layout seam, lineage UI, reminders, photo notes.
+4. M4: Duo layout seam, lineage UI, reminders, photo notes. (reminder cadence + local scheduler now landed; see `docs/local-reminders.md`)
 5. M5: Backup/restore/export + privacy audit gate.
 6. M6: TestFlight release evidence.
 

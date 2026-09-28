@@ -134,6 +134,17 @@ final class RiseLogJourneyTests: XCTestCase {
         row.tap()
     }
 
+    /// Select a SwiftUI Picker value using the stable picker identifier and
+    /// visible option label. Reminders sit after Timeline, so the standard
+    /// direction-alternating `tap` helper reveals the picker first.
+    private func chooseReminder(_ option: String) {
+        tap("detail.reminders.picker", timeout: 20)
+        let choice = app.buttons[option]
+        XCTAssertTrue(choice.waitForExistence(timeout: 10),
+                      "reminder option \(option) missing")
+        choice.tap()
+    }
+
     /// Wall badge assertion. SwiftUI may merge a NavigationLink's label
     /// into ONE accessibility element (row button label contains the badge)
     /// or keep child staticTexts visible (fleet evidence varies per layout).
@@ -318,11 +329,49 @@ final class RiseLogJourneyTests: XCTestCase {
         XCUIDevice.shared.press(.home)
         app.activate()
 
-        expect("detail.status", timeout: 15,
-               "selected culture detail must survive backgrounding")
+        // The added reminders section makes the List long enough that the
+        // status row is lazily unloaded while the oldest timeline anchor is
+        // visible. Prove selection with the persistent navigation title,
+        // then prove scroll continuity with the exact event id.
+        XCTAssertTrue(app.navigationBars["Sample starter"].waitForExistence(timeout: 15),
+                      "selected culture detail must survive backgrounding")
         XCTAssertTrue(anchor.waitForExistence(timeout: 10),
                       "saved timeline anchor must exist after foregrounding")
         XCTAssertTrue(anchor.isHittable,
                       "saved timeline anchor must remain visible after foregrounding")
+    }
+
+    /// Issue #7 simulator journey: cadence is off by default and Off remains
+    /// available. This deliberately does
+    /// not claim hardware notification delivery; that acceptance gate is
+    /// recorded separately as manual device evidence.
+    func testReminderCadenceIsOptInAndPersists() throws {
+        app.launch()
+        createCultureNamed("Reminder jar")
+        openRow(named: "Reminder jar")
+
+        let picker = app.descendants(matching: .any)["detail.reminders.picker"]
+        let deadline = Date().addingTimeInterval(20)
+        while !picker.isHittable && Date() < deadline {
+            app.swipeUp()
+            _ = picker.waitForExistence(timeout: 1)
+        }
+        XCTAssertTrue(picker.isHittable, "reminder cadence picker must be reachable")
+        // A SwiftUI Picker's selected value is not exposed consistently by
+        // XCUITest. Open it and prove the initial Off selection via its checkmark.
+        picker.tap()
+        let off = app.buttons["Off"]
+        XCTAssertTrue(off.waitForExistence(timeout: 10), "Off option missing")
+        XCTAssertTrue(off.isSelected, "reminders must be off by default")
+        off.tap()
+
+        chooseReminder("Every 24 hours")
+        picker.tap()
+        let selected = app.buttons["Every 24 hours"]
+        XCTAssertTrue(selected.waitForExistence(timeout: 10),
+                      "selected cadence option missing")
+        XCTAssertTrue(selected.isSelected,
+                      "selected cadence must persist in the per-culture picker")
+        selected.tap()
     }
 }

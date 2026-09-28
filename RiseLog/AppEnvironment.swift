@@ -19,6 +19,7 @@ import RiseKit
 @Observable
 final class AppEnvironment {
     let store: RiseLogStore
+    let reminderScheduler: LocalReminderScheduler
 
     private(set) var cultures: [Culture] = []
     private(set) var ledger = EventLedger()
@@ -72,6 +73,7 @@ final class AppEnvironment {
 
     init() throws {
         store = try RiseLogStore(url: try Self.storeURL())
+        reminderScheduler = LocalReminderScheduler()
         engine = StatusEngine(calendar: Calendar.current)
         reload()
     }
@@ -130,11 +132,34 @@ final class AppEnvironment {
         reload()
     }
 
+    /// Persists a per-culture cadence. `nil` is the default/off state.
+    /// Local notification permission is requested by the scheduler only when
+    /// moving to a non-nil cadence for the first time.
+    func setFeedingCadence(_ cadence: FeedingCadence?, for id: CultureID) async throws {
+        guard var culture = culture(id) else { throw StoreError.unknownCulture(id) }
+        culture.cadence = cadence
+        try store.saveCulture(culture)
+        reload()
+        let lastFeed = ledger.events(for: id).last { $0.kind == .feed }
+        await reminderScheduler.reschedule(culture: culture, lastFeedAt: lastFeed?.occurredAt, now: now)
+    }
+
     // MARK: Logging helpers — one per event kind; every one is append-only.
 
     func logFeed(_ id: CultureID, flour: Double?, water: Double?,
                  occurredAt: Date? = nil) throws -> Event {
-        try log(.feed, id, occurredAt, .feed(FeedAmount(flourGrams: flour, waterGrams: water)))
+        let event = try log(.feed, id, occurredAt,
+                            .feed(FeedAmount(flourGrams: flour, waterGrams: water)))
+        if let culture = culture(id), culture.cadence != nil {
+            Task {
+                await reminderScheduler.reschedule(
+                    culture: culture,
+                    lastFeedAt: event.occurredAt,
+                    now: now
+                )
+            }
+        }
+        return event
     }
 
     func logCheck(_ id: CultureID, stage: RiseStage) throws -> Event {
