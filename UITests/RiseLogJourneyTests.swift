@@ -329,8 +329,12 @@ final class RiseLogJourneyTests: XCTestCase {
         XCUIDevice.shared.press(.home)
         app.activate()
 
-        expect("detail.status", timeout: 15,
-               "selected culture detail must survive backgrounding")
+        // The added reminders section makes the List long enough that the
+        // status row is lazily unloaded while the oldest timeline anchor is
+        // visible. Prove selection with the persistent navigation title,
+        // then prove scroll continuity with the exact event id.
+        XCTAssertTrue(app.navigationBars["Sample starter"].waitForExistence(timeout: 15),
+                      "selected culture detail must survive backgrounding")
         XCTAssertTrue(anchor.waitForExistence(timeout: 10),
                       "saved timeline anchor must exist after foregrounding")
         XCTAssertTrue(anchor.isHittable,
