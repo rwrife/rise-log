@@ -160,9 +160,16 @@ jobs:
             exit 1
           fi
           echo "Archived UIDeviceFamily == [1]: PASS"
-          icon_name=$(plutil -extract CFBundleIconName raw -o - "$plist" 2>/dev/null || echo "MISSING")
-          [ "$icon_name" = "AppIcon" ] || { echo "::error::CFBundleIconName is '$icon_name', expected AppIcon"; exit 1; }
-          echo "CFBundleIconName == AppIcon (asset catalog icon generated): PASS"
+          # Icon evidence in the archived artifact: Xcode 26 with the modern
+          # single-size (1024 universal) icon does NOT write CFBundleIconName
+          # into the archived Info.plist — proof of a generated icon is the
+          # compiled Assets.car plus the emitted AppIcon*.png rasters in the
+          # bundle (matches the fleet-proven catch-tally release pipeline,
+          # whose App Store export validated with the same configuration).
+          [ -f "$app/Assets.car" ] || { echo "::error::Assets.car missing in archived app (icon asset catalog not compiled)"; exit 1; }
+          icon_count=$(find "$app" -maxdepth 1 -name 'AppIcon*.png' | wc -l | tr -d ' ')
+          [ "$icon_count" -ge 1 ] || { echo "::error::no AppIcon*.png raster emitted in archived app"; exit 1; }
+          echo "Archived icon assets (Assets.car + $icon_count AppIcon rasters): PASS"
           privacy_file="$app/PrivacyInfo.xcprivacy"
           [ -f "$privacy_file" ] || { echo "::error::PrivacyInfo.xcprivacy not present in archived app"; exit 1; }
           tracking=$(plutil -extract NSPrivacyTracking raw -o - "$privacy_file" 2>/dev/null || echo "MISSING")
