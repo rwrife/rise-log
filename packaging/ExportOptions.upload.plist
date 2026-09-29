@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- TestFlight upload (issue #8). No credential values here — the
+	     workflow authenticates via -authenticationKeyPath/-ID/-IssuerID
+	     from repository secrets; this file carries method config only.
+	     Xcode 26 removed altool and deprecated compileBitcode;
+	     method=app-store-connect + destination=upload is the supported
+	     CLI path to TestFlight without fastlane. -->
+	<key>destination</key>
+	<string>upload</string>
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>thinning</key>
+	<string>&lt;none&gt;</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>uploadMethod</key>
+	<string>app-store-connect</string>
+</dict>
+</plist>

@@ -1,0 +1,263 @@
+name: Release (TestFlight)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag or version override (defaults to GITHUB_REF_NAME)'
+        required: false
+        default: ''
+      upload:
+        description: 'Upload the exported build to TestFlight (untick for archive/export only)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BUNDLE_ID: com.infinityball.riselog
+
+jobs:
+  testflight:
+    name: Build, gate, and upload to TestFlight
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select exact pinned toolchain (blocker if absent)
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          dev=$(python3 Scripts/select_xcode.py --toolchain toolchain.json)
+          sudo xcode-select -s "$dev"
+          xcodebuild -version
+          sdk=$(xcrun --sdk iphoneos --show-sdk-version)
+          want=$(python3 -c 'import json; print(json.load(open("toolchain.json", encoding="utf-8"))["iphoneos_sdk"])')
+          [ "$sdk" = "$want" ] || { echo "::error::ACCEPTANCE BLOCKER: pinned iPhoneOS SDK $want missing (observed $sdk)"; exit 1; }
+          echo "Exact pin + iPhoneOS SDK $sdk: PASS"
+
+      - name: Zero-network gate (contract)
+        run: bash scripts/check_zero_network.sh
+
+      - name: Workspace layout seam gate
+        run: bash scripts/check_workspace_layout_seam.sh
+
+      - name: Gitignore keeps signing material out
+        run: |
+          set -euo pipefail
+          for f in fake.p8 fake.p12 fake.mobileprovision fake.cer; do
+            touch "$f"
+            git check-ignore -q "$f" || { echo "FAIL: $f is not gitignored"; exit 1; }
+            rm "$f"
+          done
+          echo "Signing-material gitignore check: PASS"
+
+      - name: iPhone-only pre-archive assertion (project file)
+        run: |
+          set -euo pipefail
+          grep -q "TARGETED_DEVICE_FAMILY = 1;" RiseLog.xcodeproj/project.pbxproj \
+            || { echo "::error::TARGETED_DEVICE_FAMILY = 1 missing from project"; exit 1; }
+          if grep -q "TARGETED_DEVICE_FAMILY = 1,2;" RiseLog.xcodeproj/project.pbxproj; then
+            echo "::error::iPad family (1,2) found — iPhone-only directive violated"
+            exit 1
+          fi
+          bad=$(grep -E "TARGETED_DEVICE_FAMILY = [^1;]" RiseLog.xcodeproj/project.pbxproj || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Non-iPhone TARGETED_DEVICE_FAMILY values found:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "iPhone-only pre-archive assertion: PASS"
+
+      - name: App icon asset present
+        run: |
+          set -euo pipefail
+          icon="RiseLog/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
+          [ -f "$icon" ] || { echo "::error::$icon missing (App Store export validation requires it)"; exit 1; }
+          file "$icon" | grep -q "1024 x 1024" || { echo "::error::$icon is not 1024x1024: $(file "$icon")"; exit 1; }
+          grep -q '"filename" : "AppIcon.png"' RiseLog/Assets.xcassets/AppIcon.appiconset/Contents.json \
+            || { echo "::error::Contents.json does not reference AppIcon.png"; exit 1; }
+          echo "App icon asset: PASS"
+
+      - name: Resolve version and monotonic build number
+        id: versioning
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          raw_tag="${INPUT_TAG:-$GITHUB_REF_NAME}"
+          clean_tag="${raw_tag#v}"
+          version="${clean_tag%%-*}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must begin with vMAJOR.MINOR.PATCH (got: $raw_tag)"
+            exit 1
+          fi
+          {
+            echo "tag=$raw_tag"
+            echo "version=$version"
+            echo "build_number=$GITHUB_RUN_NUMBER"
+          } >> "$GITHUB_OUTPUT"
+          echo "Target tag: $raw_tag, app version: $version, build number: $GITHUB_RUN_NUMBER"
+
+      - name: Prepare App Store Connect API key (file only; values never logged)
+        run: |
+          set -euo pipefail
+          p8_dir="$RUNNER_TEMP/asc_auth"
+          mkdir -p "$p8_dir"
+          chmod 700 "$p8_dir"
+          p8_path="$p8_dir/AuthKey.p8"
+          printf '%s' "${{ secrets.ASC_KEY_P8 }}" | sed 's/\\n/\n/g' > "$p8_path"
+          chmod 600 "$p8_path"
+          test -s "$p8_path"
+          echo "P8_PATH=$p8_path" >> "$GITHUB_ENV"
+          echo "App Store Connect API key staged securely under RUNNER_TEMP (path only, contents never logged)"
+
+      - name: Archive Rise Log (automatic signing via ASC API key)
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild -project RiseLog.xcodeproj \
+            -scheme RiseLog \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "build/RiseLog.xcarchive" \
+            MARKETING_VERSION="${{ steps.versioning.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.versioning.outputs.build_number }}" \
+            DEVELOPMENT_TEAM="${{ secrets.ASC_TEAM_ID }}" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$P8_PATH" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
+            archive \
+            2>&1 | tee build/archive.log
+
+      - name: Release gate — archived bundle id, iPhone-only, privacy, signing, icon
+        run: |
+          set -euo pipefail
+          app="build/RiseLog.xcarchive/Products/Applications/RiseLog.app"
+          plist="$app/Info.plist"
+          [ -f "$plist" ] || { echo "::error::Archived Info.plist not found at $plist"; exit 1; }
+          bundle_id=$(plutil -extract CFBundleIdentifier raw -o - "$plist")
+          [ "$bundle_id" = "$BUNDLE_ID" ] || { echo "::error::Bundle ID is $bundle_id, expected $BUNDLE_ID"; exit 1; }
+          echo "Archived bundle id $bundle_id: PASS"
+          fam=$(plutil -extract UIDeviceFamily xml1 -o - "$plist" | grep -c "<integer>1</integer>")
+          [ "$fam" = "1" ] || { echo "::error::UIDeviceFamily is not [1]: $(plutil -extract UIDeviceFamily xml1 -o - "$plist")"; exit 1; }
+          if plutil -extract UIDeviceFamily xml1 -o - "$plist" | grep -q "<integer>2</integer>"; then
+            echo "::error::Archived app declares iPad support (UIDeviceFamily contains 2)"
+            exit 1
+          fi
+          echo "Archived UIDeviceFamily == [1]: PASS"
+          icon_name=$(plutil -extract CFBundleIconName raw -o - "$plist" 2>/dev/null || echo "MISSING")
+          [ "$icon_name" = "AppIcon" ] || { echo "::error::CFBundleIconName is '$icon_name', expected AppIcon"; exit 1; }
+          echo "CFBundleIconName == AppIcon (asset catalog icon generated): PASS"
+          privacy_file="$app/PrivacyInfo.xcprivacy"
+          [ -f "$privacy_file" ] || { echo "::error::PrivacyInfo.xcprivacy not present in archived app"; exit 1; }
+          tracking=$(plutil -extract NSPrivacyTracking raw -o - "$privacy_file" 2>/dev/null || echo "MISSING")
+          [ "$tracking" = "false" ] || { echo "::error::NSPrivacyTracking is not false ($tracking)"; exit 1; }
+          domains_count=$(plutil -extract NSPrivacyTrackingDomains xml1 -o - "$privacy_file" | grep -c "<string>" || true)
+          [ "$domains_count" -eq 0 ] || { echo "::error::Tracking domains present ($domains_count found)"; exit 1; }
+          collected_count=$(plutil -extract NSPrivacyCollectedDataTypes xml1 -o - "$privacy_file" | grep -c "<dict>" || true)
+          [ "$collected_count" -eq 0 ] || { echo "::error::Collected data types declared ($collected_count found)"; exit 1; }
+          echo "Privacy manifest: PASS (zero tracking, zero tracking domains, zero collected data types)"
+          codesign --verify --deep --strict "$app"
+          echo "codesign --verify --deep --strict: PASS"
+
+      - name: Pick export options (upload vs export-only)
+        env:
+          UPLOAD: ${{ inputs.upload != false }}
+        run: |
+          set -euo pipefail
+          if [ "$UPLOAD" = "true" ]; then
+            cp packaging/ExportOptions.upload.plist build/ExportOptions.plist
+            echo "Export mode: upload to TestFlight"
+          else
+            cp packaging/ExportOptions.export-only.plist build/ExportOptions.plist
+            echo "Export mode: export only (no upload)"
+          fi
+          plutil -lint build/ExportOptions.plist
+
+      - name: Export archive (and upload to TestFlight when enabled)
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          xcodebuild -exportArchive \
+            -archivePath "build/RiseLog.xcarchive" \
+            -exportPath "build/export" \
+            -exportOptionsPlist "build/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$P8_PATH" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
+            2>&1 | tee build/export.log
+
+      - name: Poll TestFlight processing via App Store Connect API
+        if: ${{ inputs.upload != false }}
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          bash scripts/poll_testflight_build.sh \
+            --bundle-id "$BUNDLE_ID" \
+            --version "${{ steps.versioning.outputs.version }}" \
+            --build-number "${{ steps.versioning.outputs.build_number }}" \
+            --jwt-script "scripts/asc_jwt.rb" \
+            --key-id "${{ secrets.ASC_KEY_ID }}" \
+            --issuer-id "${{ secrets.ASC_ISSUER_ID }}" \
+            --key-path "$P8_PATH" \
+            --timeout-seconds 1800 \
+            --interval-seconds 30
+
+      - name: Generate release notes and create GitHub release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.versioning.outputs.tag }}
+        run: |
+          set -euo pipefail
+          prev=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
+          if [ -n "$prev" ]; then
+            range="$prev..$TAG"
+          else
+            range="$TAG"
+          fi
+          {
+            echo "## Rise Log $TAG"
+            echo
+            echo "Squash-merged changes since the previous tag:"
+            echo
+            git log --no-merges --pretty=format:'- %s' "$range"
+            echo
+          } > "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md"
+          gh release create "$TAG" \
+            --title "Rise Log $TAG" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+
+      - name: Retain release evidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-${{ github.run_id }}
+          path: build/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Secure cleanup of App Store Connect signing key
+        if: always()
+        run: |
+          if [ -n "${P8_PATH:-}" ] && [ -f "$P8_PATH" ]; then
+            rm -f "$P8_PATH"
+            echo "Removed App Store Connect signing key from runner."
+          fi
